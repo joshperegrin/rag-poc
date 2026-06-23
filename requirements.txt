@@ -1,0 +1,26 @@
+# LangChain core + integrations
+langchain
+langchain-core
+langchain-community        # BM25Retriever, LanceDB vectorstore
+langchain-ollama           # ChatOllama, OllamaEmbeddings (remote host)
+
+# Retrieval backends
+rank-bm25                  # BM25 backend for BM25Retriever
+scikit-learn               # TF-IDF baseline retriever
+lancedb                    # vector store
+pyarrow                    # LanceDB table backing
+
+# Document model
+pydantic
+
+# PDF ingest + OCR fallback
+pypdf
+pdf2image
+pytesseract
+pillow
+
+# Misc
+python-dotenv
+jupyter
+
+# TODO: pin versions once strategies are implemented (see ~/rag-testing/requirements.txt for known-good PDF/OCR pins)

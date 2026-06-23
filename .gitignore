@@ -1,0 +1,16 @@
+.venv/
+.env
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Generated data (keep the folders via .gitkeep)
+data/extracted/*
+!data/extracted/.gitkeep
+data/lancedb/*
+!data/lancedb/.gitkeep
+data/documents/*
+!data/documents/.gitkeep
+
+# Output artifacts
+*.results.json

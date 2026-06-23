@@ -1,0 +1,7 @@
+# Not an installable package — this file only configures pytest.
+# Code under src/ is made importable via sys.path bootstraps (notebook, examples)
+# and the pythonpath setting below (tests).
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
