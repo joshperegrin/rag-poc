@@ -39,8 +39,8 @@ class Settings:
     # Retrieval / chunking defaults
     top_k: int = _int("TOP_K", 5)
     min_score: float = _float("MIN_SCORE", 0.0)
-    chunk_min_chars: int = _int("CHUNK_MIN_CHARS", 300)
-    chunk_max_chars: int = _int("CHUNK_MAX_CHARS", 900)
+    chunk_min_chars: int = _int("CHUNK_MIN_CHARS", 1000)
+    chunk_max_chars: int = _int("CHUNK_MAX_CHARS", 1500)
 
 
 settings = Settings()

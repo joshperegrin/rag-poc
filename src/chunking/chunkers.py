@@ -17,84 +17,73 @@ from langchain_core.documents import Document
 from common.config import settings
 from common.registry import Registry
 
-CHUNKERS: Registry = Registry("chunker")
+from typing import Callable, TypeAlias
 
+# Function Structure of Chunker:
+# text(string): the whole document text
+# source(string): where the document is sourced
+# chunk_min(int): desired minimum chunks
+# chunk_max(int): desired maximum chunks
+ChunkerFunc: TypeAlias = Callable[[str, str, int | None, int | None], list[Document]]
+
+CHUNKERS: Registry[ChunkerFunc] = Registry("chunker")
 
 @CHUNKERS.register("paragraph_merge")
-def paragraph_merge(text: str, *, source: str, **params) -> list[Document]:
+def paragraph_merge(text: str, source: str, chunk_min: int | None, chunk_max: int | None) -> list[Document]:
     """Split into small units (paragraphs/lines/sentences) then greedily merge
-    into chunks between min/max chars.
+    only when the document is too big.
 
-    The default strategy, ported from ~/rag-testing/tfidf_rag_test.py:42-120.
-    Honors ``min_chars`` / ``max_chars`` from ``params`` (defaults in
-    common.config.Settings).
+    If the document is small, returns units as-is. If large, merges units
+    between min/max chars to reduce chunk count.
     """
-    min_chars = int(params.get("min_chars", settings.chunk_min_chars))
-    max_chars = int(params.get("max_chars", settings.chunk_max_chars))
+    min_chars = chunk_min if chunk_min is not None else settings.chunk_min_chars
+    max_chars = chunk_max if chunk_max is not None else settings.chunk_max_chars
 
-    # Split text into the smallest sensible units: paragraphs -> lines -> sentences.
+    # Clean up carriage return, multi tabs, and multi spaces characters
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
 
-    units: list[str] = []
-    for paragraph in re.split(r"\n\s*\n", text):
-        paragraph = paragraph.strip()
-        if not paragraph:
-            continue
-        for line in re.split(r"\n+", paragraph):
-            line = line.strip()
-            if not line:
-                continue
-            for sentence in re.split(r"(?<=[.!?])\s+", line):
-                sentence = sentence.strip()
-                if sentence:
-                    units.append(sentence)
-
-    # Greedily merge units into chunks between min/max chars.
+    # Split each paragraph into sentence-level units, hard-splitting any single
+    # sentence that exceeds max_chars on the nearest preceding word boundary.
     chunks: list[str] = []
-    current = ""
-    for unit in units:
-        if not current:
-            current = unit
-            continue
+    for paragraph in re.split(r"\n\s*\n", text):
+        paragraph_units: list[str] = []
+        for line in re.split(r"\n+", paragraph):
+            for sentence in re.split(r"(?<=[.!?])\s+", line):
+                remaining_sentence = sentence.strip()
+                while len(remaining_sentence) > max_chars:
+                    window = remaining_sentence[:max_chars]
+                    m = re.search(r"\s(?=\S*$)", window)
+                    cut = m.start() if m else max_chars
+                    paragraph_units.append(remaining_sentence[:cut].rstrip())
+                    remaining_sentence = remaining_sentence[cut:].lstrip()
+                if remaining_sentence:
+                    paragraph_units.append(remaining_sentence)
 
-        candidate = current + " " + unit
-        if len(candidate) <= max_chars:
-            current = candidate
-        elif len(current) >= min_chars:
-            # current is big enough on its own; start a new chunk with this unit
-            chunks.append(current.strip())
-            current = unit
-        else:
-            # current is too small to stand alone; keep the oversized merge
-            chunks.append(candidate.strip())
-            current = ""
-
-    if current.strip():
-        chunks.append(current.strip())
+        # Greedily merge this paragraph's units into chunks within the
+        # [min_chars, max_chars] window.
+        current = ""
+        for unit in paragraph_units:
+            if not current:
+                current = unit
+                continue
+            candidate = current + " " + unit
+            if len(candidate) <= max_chars:
+                current = candidate
+            elif len(current) >= min_chars:
+                # current is big enough to stand on its own
+                chunks.append(current)
+                current = unit
+            else:
+                # current is below min; accept the oversized merge to reach min
+                chunks.append(candidate)
+                current = ""
+        if current:
+            chunks.append(current)
 
     return [
         Document(page_content=chunk, metadata={"source": source, "chunk_index": i})
         for i, chunk in enumerate(chunks)
     ]
 
-
-@CHUNKERS.register("by_paragraph")
-def by_paragraph(text: str, *, source: str, **params) -> list[Document]:
-    raise NotImplementedError("TODO: implement by_paragraph")
-
-
-@CHUNKERS.register("recursive")
-def recursive(text: str, *, source: str, **params) -> list[Document]:
-    """Wrapper around langchain ``RecursiveCharacterTextSplitter``. Honor
-    ``chunk_size`` / ``chunk_overlap`` from ``params``."""
-    # TODO: implement using langchain_text_splitters.RecursiveCharacterTextSplitter.
-    raise NotImplementedError("TODO: implement recursive splitter wrapper")
-
-
-@CHUNKERS.register("fixed")
-def fixed(text: str, *, source: str, **params) -> list[Document]:
-    """Fixed-size character windows with overlap. Baseline."""
-    # TODO: implement fixed-size + overlap windows.
-    raise NotImplementedError("TODO: implement fixed-size chunker")
