@@ -14,3 +14,6 @@ data/documents/*
 
 # Output artifacts
 *.results.json
+data/*
+.claude/settings.local.json
+models
